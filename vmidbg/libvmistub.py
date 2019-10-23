@@ -59,8 +59,6 @@ class LibVMIStub(GDBStub):
 
     def __enter__(self):
         # init LibVMI
-        if self.kvmi_socket:
-            init_data = {VMIInitData.KVMI_SOCKET: self.kvmi_socket}
         self.vmi = Libvmi(self.vm_name, init_flags=INIT_DOMAINNAME | INIT_EVENTS, partial=True)
         self.vmi.init_paging(flags=0)
         # catch every exception to force a clean exit with __exit__
