@@ -26,9 +26,9 @@ class LinuxTaskDescriptor:
     def __init__(self, desc_addr, vmi):
         self.vmi = vmi
         self.addr = desc_addr
-        self.mm = self.vmi.read_addr_va(self.addr + self.vmi.get_offset('linux_mm'), 0)
-        self.name = self.vmi.read_str_va(self.addr + self.vmi.get_offset('linux_name'), 0)
+        self.mm = self.vmi.read_addr_va(self.addr + self.vmi.get_offset('linux_mm'), 0) 
         self.id = self.vmi.read_32_va(self.addr + self.vmi.get_offset('linux_pid'), 0)
+        self.name = self.vmi.read_str_va(self.addr + self.vmi.get_offset('linux_name'), 0)
         self.stack = self.vmi.read_addr_va(self.addr + self.vmi.get_kernel_struct_offset('task_struct', 'stack'),0)
         self.pt_regs = self.stack + 16384 - 8 - self.vmi.get_kernel_struct_offset('pt_regs', 'ss')
         self.tgid = self.vmi.read_32_va(self.addr + self.vmi.get_kernel_struct_offset('task_struct','tgid'),0)
@@ -52,7 +52,11 @@ class LinuxTaskDescriptor:
         return self.vmi.read_32_va(self.addr + self.vmi.get_kernel_struct_offset('task_struct','state'), 0)
 
     def is_running(self):
-        return self.get_state() == LinuxTaskState.RUNNING
+        #print(self.get_state())
+        if self.get_state() == 0:
+            #print("RUNNING")
+            return True
+        return False
 
     def get_next_thread(self):
         thread_group_offset = self.vmi.get_kernel_struct_offset('task_struct','thread_group')
@@ -60,6 +64,18 @@ class LinuxTaskDescriptor:
 
     def get_running_thread(self):
         return [thread for thread in self.list_threads() if thread.is_running()][0]
+
+    def list_threads(self):
+        head = self.get_next_thread()
+        thread_entry = head
+
+        while True:
+            desc = LinuxTaskDescriptor(thread_entry, self.vmi)
+            yield desc
+
+            thread_entry = desc.get_next_thread()
+            if thread_entry == head:
+                break
 
     def read_registers(self,vcpu=0):
         if self.is_running():
@@ -151,6 +167,7 @@ class LinuxDebugContext(AbstractDebugContext):
 
         # 4 - set breakpoint on the running thread
         ip = self.get_thread().read_registers()[X86Reg.RIP]
+        print(hex(ip))
         self.bpm.continue_until(ip)
 
     def detach(self):
@@ -158,9 +175,6 @@ class LinuxDebugContext(AbstractDebugContext):
 
     def get_dtb(self):
         return self.target_desc.dtb
-
-    def check_dtb(self, dtb):
-        return None
 
     def dtb_to_desc(self, dtb):
         for desc in self.list_processes():
@@ -181,9 +195,9 @@ class LinuxDebugContext(AbstractDebugContext):
 
         return [thread for thread in threads if thread.id == tid][0]
 
+    def get_current_running_thread(self):
+        return self.target_desc.get_running_thread()
 
-    def list_threads(self):
-        return self.target_desc.list_threads()
 
     def list_processes(self):
         head_desc = self.vmi.translate_ksym2v('init_task')
@@ -196,6 +210,9 @@ class LinuxDebugContext(AbstractDebugContext):
             desc_addr = desc.next_desc
             if desc_addr == head_desc:
                 break
+
+    def list_threads(self):
+        return self.target_desc.list_threads()
 
     def cb_on_swbreak(self, vmi, event):
         cb_data = event.data
