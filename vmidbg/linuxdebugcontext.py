@@ -52,9 +52,7 @@ class LinuxTaskDescriptor:
         return self.vmi.read_32_va(self.addr + self.vmi.get_kernel_struct_offset('task_struct','state'), 0)
 
     def is_running(self):
-        #print(self.get_state())
         if self.get_state() == 0:
-            #print("RUNNING")
             return True
         return False
 
@@ -165,10 +163,6 @@ class LinuxDebugContext(AbstractDebugContext):
         if self.target_desc.mm == 0:
             raise RuntimeError('intercepting kernel threads is not supported')
 
-        # 4 - set breakpoint on the running thread
-        ip = self.get_thread().read_registers()[X86Reg.RIP]
-        print(hex(ip))
-        self.bpm.continue_until(ip)
 
     def detach(self):
         self.vmi.resume_vm()
